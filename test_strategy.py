@@ -127,6 +127,75 @@ class TestEMAStrategyAndBacktester(unittest.TestCase):
             self.assertIn("ema21", chart_data)
             self.assertIn("markers", chart_data)
 
+    def test_live_bot_lifecycle_and_filter_args(self):
+        """Verify LiveEMABot accepts all quantitative filter arguments and handles start/status/stop."""
+        from live_trader import LiveEMABot
+        bot = LiveEMABot()
+        res = bot.start(
+            symbol="^NSEI",
+            timeframe="15m",
+            mode="ATM_BUY",
+            start_time="09:30",
+            cutoff_time="14:30",
+            is_paper=True,
+            filter_vwap=True,
+            filter_htf_trend=True,
+            filter_adx=True,
+            trailing_sl=True,
+            atr_mult=1.8,
+        )
+        self.assertTrue(res.get("success"))
+        self.assertTrue(bot.is_running)
+        self.assertTrue(bot.filter_vwap)
+        self.assertTrue(bot.filter_htf_trend)
+        self.assertTrue(bot.filter_adx)
+        self.assertTrue(bot.trailing_sl)
+        self.assertEqual(bot.atr_mult, 1.8)
+
+        status = bot.get_status()
+        self.assertTrue(status.get("is_running"))
+        self.assertTrue(status.get("filter_vwap"))
+        self.assertTrue(status.get("filter_htf_trend"))
+        self.assertTrue(status.get("filter_adx"))
+        self.assertTrue(status.get("trailing_sl"))
+        self.assertEqual(status.get("atr_mult"), 1.8)
+
+        stop_res = bot.stop()
+        self.assertTrue(stop_res.get("success"))
+        self.assertFalse(bot.is_running)
+
+    def test_bot_start_endpoint_api(self):
+        """Verify /api/bot/start accepts quantitative filters and doesn't throw 500."""
+        from live_trader import live_bot
+        client = app.test_client()
+
+        # Stop bot first if already running
+        live_bot.stop()
+
+        res = client.post("/api/bot/start", json={
+            "symbol": "^NSEI",
+            "timeframe": "15m",
+            "mode": "ATM_BUY",
+            "start_time": "09:30",
+            "cutoff_time": "14:30",
+            "is_paper": True,
+            "filter_vwap": True,
+            "filter_htf_trend": True,
+            "filter_adx": True,
+            "trailing_sl": True,
+            "atr_mult": 1.8,
+        })
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data.get("success"))
+
+        status_res = client.get("/api/bot/status")
+        self.assertEqual(status_res.status_code, 200)
+        status_data = status_res.get_json()
+        self.assertTrue(status_data.get("filter_vwap"))
+
+        client.post("/api/bot/stop")
+
 
 if __name__ == "__main__":
     unittest.main()
